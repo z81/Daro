@@ -1,295 +1,4 @@
-/*import * as T from "@effect-ts/core/Effect";
-import * as S from "@effect-ts/system/Stream";
-import * as O from "@effect-ts/system/Option";
-import * as SK from "@effect-ts/system/Stream/Sink";
-import { pipe } from "fp-ts/lib/function";
-
-console.log("test");
-
-const sink = SK.collectAllToMap((k: number) => {
-  console.log("abc", k);
-
-  return `key-${k}`;
-})(() => 1);
-
-const result = pipe(
-  S.effectAsync<unknown, never, number>((cb) => {
-    let counter = 0;
-
-    setInterval(() => {
-      cb(T.succeed([counter++]));
-    }, 10);
-  }),
-  S.run(sink),
-  T.runAsap
-);
-*/
-// import * as Array from "@effect-ts/core/Array";
-// // import * as Map from "@effect-ts/core/Map";
-// import * as T from "@effect-ts/core/Effect";
-// import * as L from "@effect-ts/core/Effect/Layer";
-// import * as M from "@effect-ts/core/Effect/Managed";
-// import * as Ref from "@effect-ts/core/Effect/Ref";
-// import * as Q from "@effect-ts/system/Queue";
-// import * as S from "@effect-ts/system/Stream";
-// import * as O from "@effect-ts/system/Option";
 import { pipe } from "@effect-ts/core/Function";
-// import type { NoSuchElementException } from "@effect-ts/system/GlobalExceptions";
-// import { tag } from "@effect-ts/system/Has";
-// import { Any } from "@effect-ts/core/Prelude";
-// import { number } from "io-ts";
-
-// simulate a database connection to a key-value store
-// export interface DbConnection {
-//   readonly start: () => T.UIO<void>;
-//   readonly clear: T.UIO<void>;
-//   readonly sub: T.Effect<unknown, never, unknown>;
-// }
-
-// export const DbConnection = tag<DbConnection>();
-
-// export const DbLive = pipe(
-//   Q.makeUnbounded<number>(),
-//   T.chain((ref) =>
-//     T.effectTotal(
-//       (): DbConnection => ({
-//         start: () =>
-//           T.effectTotal(() => {
-//             let i = 0;
-//             setInterval(() => {
-//               ref.offer(i++);
-//             }, 10);
-//           }),
-//         sub: ref.take,
-//         clear: T.effectTotal(() => {
-//           console.log("clear");
-//         }),
-//       })
-//     )
-//   ),
-//   M.make((_) => _.clear),
-//   L.fromManaged(DbConnection)
-// );
-
-// export const ProgramLive = L.all(DbLive);
-
-// export const { start, sub } = T.deriveLifted(DbConnection)(
-//   ["start"],
-//   ["sub"],
-//   []
-// );
-
-// // write a program that use the database
-// export const program = pipe(
-//   T.do,
-//   T.tap(() => start()),
-//   T.chain(() => sub),
-//   T.map((v) => {
-//     console.log(v);
-//   })
-// );
-
-// // run the program and print the output
-// pipe(
-//   program,
-//   T.chain((s) =>
-//     T.effectTotal(() => {
-//       console.log(`Done: ${s}`);
-//     })
-//   ),
-//   T.provideSomeLayer(ProgramLive),
-//   T.run
-// );
-
-// const q = Q.makeUnbounded<number>();
-
-// const result = pipe(
-//   S.effectAsync<unknown, never, number>((cb) => {
-//     let counter = 0;
-
-//     setInterval(() => {
-//       cb(T.succeed([counter++]));
-//     }, 300);
-//   })
-//   // S.toQueueUnbounded
-// );
-
-// pipe(
-//   // T.effectTotal(() => {
-//   //   console.log("Start");
-//   // }),
-//   // T.chain(() => result),
-//   result,
-//   S.tap((v) =>
-//     T.effectTotal(() => {
-//       console.log(v);
-//     })
-//   ),
-//   S.runCount,
-//   T.chain((v) => {
-//     console.log("chain");
-//     return T.effectTotal(() => {
-//       console.log("chain", v);
-//       return v;
-//     });
-//   }),
-//   // T.chain(() => {
-//   //   return T.effectAsync<unknown, unknown, number>((cb) =>
-//   //     setTimeout(() => {
-//   //       cb(T.effectTotal(() => 1));
-//   //     }, 1000)
-//   //   );
-//   // }),
-//   // T.chain(() => {
-//   //   return T.effectAsync<unknown, unknown, number>((cb) =>
-//   //     setTimeout(() => {
-//   //       cb(T.effectTotal(() => 2));
-//   //     }, 500)
-//   //   );
-//   // }),
-//   // T.effectTotal(() => 1),
-//   T.tap((v) => {
-//     return T.effectTotal(() => {
-//       console.log(v);
-//     });
-//   }),
-//   T.run
-// );
-
-// import * as Ex from "@effect-ts/core/Effect/Exit";
-// import type { Has } from "@effect-ts/core/Has";
-// import { intersect } from "@effect-ts/core/Utils";
-// import * as http from "http";
-
-// export interface HTTPServerConfig {
-//   config: {
-//     host: string;
-//     port: number;
-//   };
-// }
-
-// export const HTTPServerConfig = tag<HTTPServerConfig>();
-
-// export const { config: accessServerConfigM } = T.deriveAccessM(
-//   HTTPServerConfig
-// )(["config"]);
-
-// export function serverConfig(
-//   config: HTTPServerConfig["config"]
-// ): L.Layer<unknown, never, Has<HTTPServerConfig>> {
-//   return L.create(HTTPServerConfig).pure({ config });
-// }
-
-// export interface Request {
-//   req: http.IncomingMessage;
-//   res: http.ServerResponse;
-// }
-
-// export const Request = tag<Request>();
-
-// export const { req: accessReqM, res: accessResM } = T.deriveAccessM(Request)([
-//   "req",
-//   "res",
-// ]);
-
-// export interface Server {
-//   server: http.Server;
-// }
-
-// export interface RequestQueue {
-//   queue: Q.Queue<Request>;
-// }
-
-// export const Server = tag<Server>();
-// export const RequestQueue = tag<RequestQueue>();
-
-// export const { queue: accessQueueM } = T.deriveAccessM(RequestQueue)(["queue"]);
-// export const { server: accessServerM } = T.deriveAccessM(Server)(["server"]);
-
-// export const LiveHTTP = pipe(
-//   Q.makeUnbounded<Request>(),
-//   T.chain((queue) =>
-//     pipe(
-//       T.effectTotal(() =>
-//         http.createServer((req, res) => {
-//           console.log(req, req);
-//           T.run(queue.offer({ req, res }));
-//         })
-//       ),
-//       T.map((server): Server & RequestQueue => ({ server, queue }))
-//     )
-//   ),
-//   T.tap(({ server }) =>
-//     accessServerConfigM(({ host, port }) =>
-//       T.effectAsync<unknown, never, void>((cb) => {
-//         function clean() {
-//           console.log("clean");
-//           server.removeListener("error", onErr);
-//           server.removeListener("listening", onDone);
-//         }
-//         function onErr(err: Error) {
-//           console.log("err", err);
-//           clean();
-//           cb(T.die(err));
-//         }
-//         function onDone() {
-//           console.log("onDone");
-//           clean();
-//           cb(T.unit);
-//         }
-//         console.log("server", port, host);
-//         server.listen(port, host);
-
-//         server.once("error", onErr);
-//         server.once("listening", onDone);
-//       })
-//     )
-//   ),
-//   M.make(({ queue, server }) =>
-//     pipe(
-//       T.tuple(
-//         T.result(
-//           T.effectAsync<unknown, never, void>((cb) => {
-//             server.close((err) => {
-//               console.log("close", err);
-//               if (err) {
-//                 cb(T.die(err));
-//               } else {
-//                 cb(T.unit);
-//               }
-//             });
-//           })
-//         ),
-//         T.result(queue.shutdown)
-//       ),
-//       T.chain(([ea, eb]) => T.done(Ex.zip(eb)(ea)))
-//     )
-//   ),
-//   M.map((_) => intersect(Server.of(_), RequestQueue.of(_))),
-//   L.fromRawManaged
-// );
-
-// export const ServerConfigMain = serverConfig({
-//   host: "0.0.0.0",
-//   port: 8081,
-// });
-
-// function main() {
-//   return pipe(
-//     accessQueueM((q) => {
-//       return pipe(
-//         q.take,
-//         T.tap((v) => {
-//           return T.effectTotal(() => {
-//             console.log(v);
-//           });
-//         })
-//       );
-//     }),
-//     T.provideSomeLayer(LiveHTTP["<<<"](ServerConfigMain)),
-//     T.run
-//   );
-// }
 
 /*
 проброс контекста [x]
@@ -318,6 +27,14 @@ type FlatPromise<T extends Promise<any>> = T extends Promise<infer U>
     : U
   : T;
 
+type FlatPromiseOrGenerator<
+  T extends Promise<any> | Generator<any>
+> = T extends Promise<infer U> | Generator<infer U>
+  ? U extends Promise<any>
+    ? FlatPromiseOrGenerator<U>
+    : U
+  : T;
+
 type IncorrectTypeError<T, T2> = {
   _tag: "Error";
   type1: T;
@@ -331,8 +48,6 @@ type NotFoundKeyError = {
 type Error = {
   _tag: "Error";
 };
-
-type Inline<T> = { [k in keyof T]: T[k] };
 
 type RecDiff<A extends Record<string, any>, B extends Record<string, any>> = {
   // @ts-expect-error
@@ -356,7 +71,10 @@ class F<I, RC extends {}, R = {}> {
 
   run = (arg: I, ctx: RC) => this.register(arg, ctx);
 
-  static delay = <A extends F<any, any>, R = FlatPromise<UnpackF<A>>>(
+  static delay = <
+    A extends F<any, any>,
+    R = FlatPromiseOrGenerator<UnpackF<A>>
+  >(
     time: number
   ) =>
     F.map<A, R>(
@@ -370,7 +88,7 @@ class F<I, RC extends {}, R = {}> {
   static map = <
     A extends F<any, any>,
     B,
-    V = FlatPromise<UnpackF<A>>,
+    V = FlatPromiseOrGenerator<UnpackF<A>>,
     RC = UnpackCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, B>
@@ -379,7 +97,7 @@ class F<I, RC extends {}, R = {}> {
   static tap = <
     A extends F<any, any>,
     B,
-    V = FlatPromise<UnpackF<A>>,
+    V = FlatPromiseOrGenerator<UnpackF<A>>,
     RC = UnpackCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, any>
@@ -392,7 +110,7 @@ class F<I, RC extends {}, R = {}> {
   static provide = <
     A extends F<any, any>,
     PC extends Partial<RC>,
-    V = FlatPromise<UnpackF<A>>,
+    V = FlatPromiseOrGenerator<UnpackF<A>>,
     RC = UnpackCtxF<A>,
     PPC = UnpackProvCtxF<A>,
     C = PC & PPC
@@ -411,7 +129,7 @@ class F<I, RC extends {}, R = {}> {
   >(
     ...args: I extends never ? [T, U] : [T]
   ) =>
-    new Promise<U>((resolve) => {
+    new Promise<U>(async (resolve) => {
       let inst: any = { next: args[0] };
       let ctx = {};
       const stacks = [];
@@ -419,46 +137,52 @@ class F<I, RC extends {}, R = {}> {
       while (inst?.next) {
         inst = inst.next;
         ctx = { ...ctx, ...(inst.ctx ?? {}) };
-        stacks.push(inst as any);
+        stacks.unshift(inst as any);
       }
 
-      resolve(
-        stacks.reduceRight((res: unknown, inst) => {
-          if (res instanceof Promise) {
-            return res.then((res) => inst.run(res, ctx));
-          }
+      let branches = [undefined];
+      for (const inst of stacks) {
+        for (const idx in branches) {
+          const branch = branches[idx];
+          const isGenerator =
+            branch &&
+            typeof branch === "object" &&
+            typeof branch![Symbol.iterator] === "function";
 
-          return inst.run(res, ctx);
-        }, undefined)
-      );
+          if (isGenerator && !Array.isArray(branch)) {
+            let i = 0;
+            // @ts-ignore
+            for (const newBranch of branches[idx]) {
+              if (i++ === 0) {
+                branches[idx] = await inst.run(newBranch, ctx);
+              } else {
+                branches.push(await inst.run(newBranch, ctx));
+              }
+            }
+          }
+        }
+
+        for (const idx in branches) {
+          branches[idx] = await inst.run(branches[idx], ctx);
+        }
+      }
+
+      resolve(branches as any);
     });
 
-  static get empty() {
+  static empty() {
     return new F(() => undefined);
   }
 }
 
-type Head<Ts extends [any, ...any[]]> = Ts extends [infer T, ...any[]]
-  ? T
-  : never;
-
-// const pipe2 = <T>(...args: T) => {
-//   //
-// };
 pipe(
   F.access<{ discord: Map<string, string> }>(),
   F.map((_, ctx) => ctx.discord.set("test", "1")),
-  F.provide({ discord: new Map<string, string>() }),
-  F.module((_, ctx) => ({
-    discord: ctx.discord,
-  }))
+  F.provide({ discord: new Map<string, string>() })
+  // F.module((_, ctx) => ({
+  //   discord: ctx.discord,
+  // }))
 );
-// pipe2(
-//   1,
-//   (v) => v + 1,
-//   (v) => v + 1,
-//   console.log
-// );
 
 pipe(
   // F.of(() => 1),
@@ -468,7 +192,13 @@ pipe(
   F.map((v, ctx) => `${ctx.prefix}${Number(v) * ctx.mul}`),
   F.delay(100),
   F.map((v) => Promise.resolve(v + 2)),
-  F.tap((v) => console.log(v)),
+  F.map(function* (v, ctx) {
+    yield 1;
+    yield 2;
+    yield 3;
+  }),
+  F.map((v) => Promise.resolve(v * 2)),
+  F.tap((v, ctx) => console.log("result", v)),
   F.provide({ mul: 100 }),
   F.provide({ prefix: "str: " }),
   // F.catch((e) => {
