@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES5",
+    "outDir": "lib",
+    "lib": ["ESNext"],
+    "downlevelIteration": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}
