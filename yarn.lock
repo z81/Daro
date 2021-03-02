@@ -23,26 +23,6 @@
     chalk "^2.0.0"
     js-tokens "^4.0.0"
 
-"@effect-ts/core@^0.20.5":
-  version "0.20.6"
-  resolved "https://registry.yarnpkg.com/@effect-ts/core/-/core-0.20.6.tgz#a207f4c776f1db5a39afc2206ffa3a1d4c30fd9f"
-  integrity sha512-Atiu1YJF7P9q38adr+rCKiK5Wuo7hV2hZLHu19u/rl4YYnq/TZxTX+ENzWFwKY+8dWl625kTrsAN6mWbxZilJg==
-  dependencies:
-    "@effect-ts/system" "^0.17.5"
-    "@effect-ts/tracing-utils" "^0.4.2"
-
-"@effect-ts/system@^0.17.5":
-  version "0.17.5"
-  resolved "https://registry.yarnpkg.com/@effect-ts/system/-/system-0.17.5.tgz#a735a70f60a079ecf43d3758d1c87fe0573a1bbf"
-  integrity sha512-06Scs3MW/QkqVjoz1TRzoUPUNg6OaDwsqcT+b21K8VcfXEMfQnSlnwXsQaseigHSDvZC6XYFZSJ1+432ODyFuw==
-  dependencies:
-    "@effect-ts/tracing-utils" "^0.4.2"
-
-"@effect-ts/tracing-utils@^0.4.2":
-  version "0.4.2"
-  resolved "https://registry.yarnpkg.com/@effect-ts/tracing-utils/-/tracing-utils-0.4.2.tgz#ac7535912891f74487bbd1baa17973be121ac897"
-  integrity sha512-Ljh3MhS8/59OQN9YUF/trBgTjxUENOqLe65FSiDI3FpsjXOfOhE/0572nH8U0IRzSrDil2MVDg1NU31xrHakGw==
-
 "@eslint/eslintrc@^0.4.0":
   version "0.4.0"
   resolved "https://registry.yarnpkg.com/@eslint/eslintrc/-/eslintrc-0.4.0.tgz#99cc0a0584d72f1df38b900fb062ba995f395547"

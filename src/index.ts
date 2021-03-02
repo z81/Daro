@@ -1,11 +1,12 @@
-import { pipe } from "@effect-ts/core/Function";
-
 /*
 проброс контекста [x]
+генераторы [x]
 паралельное выполнение / таймаут
 обработка ошибок
 модули
 */
+
+import { pipe } from "./pipe";
 
 type Arrow<A, B> = (a: A) => B;
 type Arrow2<A, B, C> = (a: A, b: B) => C;
