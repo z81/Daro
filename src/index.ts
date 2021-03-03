@@ -38,12 +38,18 @@ setInterval(() => {
 //   console.log("333333 end");
 // })();
 
+const delay = (t: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, t);
+  });
+
 const ds = pipe(
   F.access<{ queue: Queue<string> }>(),
-  F.map(function* (v, ctx) {
-    yield "Hi!";
-    yield "Username%%";
-    yield "Bye";
+  F.map(async function* (v, ctx) {
+    while (true) {
+      await delay(500);
+      yield `str ${Math.random()}`;
+    }
   }),
   F.map((msg, ctx) => ctx.queue.add(msg)),
   F.provide({ queue: new Queue<string>() }),
@@ -58,26 +64,26 @@ pipe(
   F.access<{
     mul: number;
     prefix: string;
-    // ds: typeof ds;
+    ds: typeof ds;
   }>(),
   // F.map((v, ctx) => 1),
   // F.map((v, ctx) => `${2 + v}`),
   // F.map((v, ctx) => `${ctx.prefix}${Number(v) * ctx.mul}`),
   // F.delay(1000),
   // F.map((v) => Promise.resolve(v + 2)),
-  F.map(function* (v, ctx) {
-    yield 1;
-    yield 2;
-  }),
-  // F.map(async function* (v, ctx) {
-  //   for await (const ds of q) {
-  //     yield ds;
-  //   }
+  // F.map(function* (v, ctx) {
+  //   yield 1;
+  //   yield 2;
   // }),
+  F.map(async function* (v, ctx) {
+    for await (const ds of ctx.queue) {
+      yield ds;
+    }
+  }),
   // F.map((v: any) => Promise.resolve(v * 2)),
   F.tap((v, ctx) => console.log("result", v)),
   F.provide({ mul: 100, prefix: "str: " }),
-  // F.provide({ ds /*, queue: new Queue<string>()*/ }),
+  F.provide({ ds /*, queue: new Queue<string>()*/ }),
   // F.catch((e) => {
   //   //
   // }),

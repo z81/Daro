@@ -86,6 +86,60 @@ export class F<I, RC extends {}, R = {}> {
     ctx: PC
   ) => (next: A) => new F<V, RCTX, CTX>((v) => v, next, ctx as any);
 
+  // static runPromise = <
+  //   T extends F<any, any, any>,
+  //   U extends T extends F<any, infer RC, infer PC>
+  //     ? NotFoundKeyError extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
+  //       ? { [k in keyof RC]: RecDiff<RC, PC>[k] }
+  //       : F<any, RC, PC>
+  //     : never,
+  //   I = NotFoundKeyError extends U[keyof U] ? never : U
+  // >(
+  //   ...args: I extends never ? [T, U] : [T]
+  // ) =>
+  //   new Promise<U>(async (resolve) => {
+  //     let inst: any = { next: args[0] };
+  //     let ctx = {};
+  //     const stacks = [];
+
+  //     while (inst?.next) {
+  //       inst = inst.next;
+  //       ctx = { ...ctx, ...(inst.ctx ?? {}) };
+  //       stacks.unshift(inst as any);
+  //     }
+
+  //     let branches = [undefined];
+  //     for (const inst of stacks) {
+  //       for (const idx in branches) {
+  //         const branch = branches[idx];
+
+  //         const isGenerator =
+  //           branch &&
+  //           typeof branch === "object" &&
+  //           (typeof branch![Symbol.iterator] === "function" ||
+  //             typeof branch![Symbol.asyncIterator] === "function");
+
+  //         if (isGenerator && !Array.isArray(branch)) {
+  //           let i = 0;
+  //           // @ts-ignore
+  //           for await (const newBranch of branches[idx]) {
+  //             if (i++ < branches.length) {
+  //               branches[idx] = await inst.run(newBranch, ctx);
+  //             } else {
+  //               branches.push(await inst.run(newBranch, ctx));
+  //             }
+  //           }
+  //         }
+  //       }
+
+  //       for (const idx in branches) {
+  //         branches[idx] = await inst.run(branches[idx], ctx);
+  //       }
+  //     }
+
+  //     resolve(branches as any);
+  //   });
+
   static runPromise = <
     T extends F<any, any, any>,
     U extends T extends F<any, infer RC, infer PC>
@@ -105,35 +159,75 @@ export class F<I, RC extends {}, R = {}> {
       while (inst?.next) {
         inst = inst.next;
         ctx = { ...ctx, ...(inst.ctx ?? {}) };
-        stacks.unshift(inst as any);
+
+        stacks.push(inst as any);
       }
 
-      let branches = [undefined];
-      for (const inst of stacks) {
-        for (const idx in branches) {
-          const branch = branches[idx];
+      // Todo
+      await Promise.all(
+        Object.entries(ctx).map(async ([k, v]) => {
+          if (typeof v === "object" && v instanceof M) {
+            // const { resolve, clear } = v.run(undefined, ctx);
+            // ctx = { ...ctx, ...resolve };
+
+            // v.setResolve(resolve);
+            // v.setClear(clear);
+            const rr = new Promise((res) => {
+              v.accept((_ctx, resolve) => {
+                Object.entries(_ctx).forEach(([kk, v]) => {
+                  (ctx as any)[kk] = v;
+                });
+
+                (ctx as any)[k] = { ..._ctx, ...resolve };
+
+                res(undefined);
+              });
+            });
+
+            (F.runPromise as any)(v as any);
+
+            await rr;
+          }
+        })
+      );
+
+      const branches = [undefined];
+
+      for (let i = stacks.length - 1; i >= 0; i--) {
+        const stack = stacks[i];
+
+        let branchId = 0;
+        for (const branch of branches) {
+          const value = await stack.run(branch, ctx);
+          branches[branchId] = value;
+          branchId++;
 
           const isGenerator =
-            branch &&
-            typeof branch === "object" &&
-            (typeof branch![Symbol.iterator] === "function" ||
-              typeof branch![Symbol.asyncIterator] === "function");
+            value &&
+            typeof value === "object" &&
+            (typeof value![Symbol.iterator] === "function" ||
+              typeof value![Symbol.asyncIterator] === "function");
 
-          if (isGenerator && !Array.isArray(branch)) {
-            let i = 0;
-            // @ts-ignore
-            for await (const newBranch of branches[idx]) {
-              if (i++ < branches.length) {
-                branches[idx] = await inst.run(newBranch, ctx);
+          if (isGenerator) {
+            let valueIdx = 0;
+
+            for await (const v of value) {
+              if (valueIdx === branchId - 1) {
+                branches[branchId - 1] = v;
               } else {
-                branches.push(await inst.run(newBranch, ctx));
+                branches.push(v);
               }
-            }
-          }
-        }
 
-        for (const idx in branches) {
-          branches[idx] = await inst.run(branches[idx], ctx);
+              for (let j = i - 1; j >= 0; j--) {
+                branches[branchId - 1] = await stacks[j].run(v, ctx);
+              }
+
+              valueIdx++;
+            }
+
+            resolve(branches as any);
+            return;
+          }
         }
       }
 
@@ -166,6 +260,7 @@ export class F<I, RC extends {}, R = {}> {
 export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   private clearFn = () => {};
   private resolve!: IN;
+  private acceptFn: any;
 
   setClear = (clear: () => any) => {
     this.clearFn = clear;
@@ -178,4 +273,16 @@ export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   };
 
   clear = () => this.clearFn();
+
+  run = (arg: I, ctx: RC) => {
+    const res = this.register(arg, ctx);
+    this.setClear(res.clear);
+    this.setResolve(res.resolve);
+    this.acceptFn(ctx, res.resolve);
+    return res;
+  };
+
+  accept = (cb: (ctx: RC, arg: any) => any) => {
+    this.acceptFn = cb;
+  };
 }
