@@ -8,7 +8,7 @@ export type FlatPromise<T extends Promise<any>> = T extends Promise<infer U>
 
 export type FlatPromiseOrGenerator<
   T extends Promise<any> | Generator<any>
-> = T extends Promise<infer U> | Generator<infer U>
+> = T extends Promise<infer U> | Generator<infer U> | AsyncGenerator<infer U>
   ? U extends Promise<any>
     ? FlatPromiseOrGenerator<U>
     : U

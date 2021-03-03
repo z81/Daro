@@ -1,5 +1,5 @@
 import { AnyError, NotFoundKeyError } from "./errors";
-import { M } from "./m";
+// import { M } from "./m";
 import { Arrow, Arrow2, FlatPromiseOrGenerator, RecDiff } from "./types";
 
 export type UnpackF<T extends F<any, any>> = T extends F<infer U, infer V>
@@ -112,15 +112,17 @@ export class F<I, RC extends {}, R = {}> {
       for (const inst of stacks) {
         for (const idx in branches) {
           const branch = branches[idx];
+
           const isGenerator =
             branch &&
             typeof branch === "object" &&
-            typeof branch![Symbol.iterator] === "function";
+            (typeof branch![Symbol.iterator] === "function" ||
+              typeof branch![Symbol.asyncIterator] === "function");
 
           if (isGenerator && !Array.isArray(branch)) {
             let i = 0;
             // @ts-ignore
-            for (const newBranch of branches[idx]) {
+            for await (const newBranch of branches[idx]) {
               if (i++ < branches.length) {
                 branches[idx] = await inst.run(newBranch, ctx);
               } else {
@@ -152,5 +154,28 @@ export class F<I, RC extends {}, R = {}> {
     PC = UnpackProvCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, T>
-  ) => (next: A) => new M<B, RC, PC>(fn, next);
+  ) => (next: A) =>
+    new M<
+      B,
+      RC & ReturnType<typeof fn>["resolve"],
+      PC & ReturnType<typeof fn>["resolve"],
+      ReturnType<typeof fn>["resolve"]
+    >(fn, next);
+}
+
+export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
+  private clearFn = () => {};
+  private resolve!: IN;
+
+  setClear = (clear: () => any) => {
+    this.clearFn = clear;
+    return this;
+  };
+
+  setResolve = (resolve: IN) => {
+    this.resolve = resolve;
+    return this;
+  };
+
+  clear = () => this.clearFn();
 }
