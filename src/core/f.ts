@@ -1,4 +1,6 @@
-import { Arrow2, FlatPromiseOrGenerator, RecDiff } from "./types";
+import { AnyError, NotFoundKeyError } from "./errors";
+import { M } from "./m";
+import { Arrow, Arrow2, FlatPromiseOrGenerator, RecDiff } from "./types";
 
 export type UnpackF<T extends F<any, any>> = T extends F<infer U, infer V>
   ? U
@@ -37,49 +39,61 @@ export class F<I, RC extends {}, R = {}> {
 
   static of = <R>(fn: () => R) => new F<R, any>(fn);
 
-  static access = <T>() => new F<undefined, T>(() => undefined);
+  static access = <
+    T,
+    U = {
+      [k in keyof T]: T[k] extends F<any, infer C, infer RC> ? C : never;
+    },
+    D = {
+      [k in keyof T]: T[k] extends F<any, infer C, infer RC> ? RC : never;
+    },
+    RC = U[keyof U] extends never ? T : T & U[keyof U],
+    PC = D[keyof D] extends never ? {} : D[keyof D]
+  >() => new F<undefined, RC, PC>(() => undefined);
 
   static map = <
-    A extends F<any, any>,
+    A extends F<any, any, any>,
     B,
     V = FlatPromiseOrGenerator<UnpackF<A>>,
-    RC = UnpackCtxF<A>
+    RC = UnpackCtxF<A>,
+    PC = UnpackProvCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, B>
-  ) => (next: A) => new F<B, RC>(fn, next);
+  ) => (next: A) => new F<B, RC, PC>(fn, next);
 
   static tap = <
     A extends F<any, any>,
     B,
     V = FlatPromiseOrGenerator<UnpackF<A>>,
-    RC = UnpackCtxF<A>
+    RC = UnpackCtxF<A>,
+    PC = UnpackProvCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, any>
   ) => (next: A) =>
-    new F<B, RC>((...args) => {
+    new F<B, RC, PC>((...args) => {
       fn(...args);
       return args[0];
     }, next);
 
   static provide = <
     A extends F<any, any>,
-    PC extends Partial<RC>,
+    PC extends Partial<RCTX>,
     V = FlatPromiseOrGenerator<UnpackF<A>>,
-    RC = UnpackCtxF<A>,
+    RCTX = UnpackCtxF<A>,
     PPC = UnpackProvCtxF<A>,
-    C = PC & PPC
+    CTX = PC & PPC
   >(
     ctx: PC
-  ) => (next: A) => new F<V, RC, C>((v) => v, next, ctx as any);
+  ) => (next: A) => new F<V, RCTX, CTX>((v) => v, next, ctx as any);
 
   static runPromise = <
     T extends F<any, any, any>,
     U extends T extends F<any, infer RC, infer PC>
-      ? Error extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
+      ? NotFoundKeyError extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
         ? { [k in keyof RC]: RecDiff<RC, PC>[k] }
         : F<any, RC, PC>
       : never,
-    I = Error extends U[keyof U] ? never : U
+    I = NotFoundKeyError extends U[keyof U] ? never : U
   >(
     ...args: I extends never ? [T, U] : [T]
   ) =>
@@ -127,4 +141,16 @@ export class F<I, RC extends {}, R = {}> {
   static empty() {
     return new F(() => undefined);
   }
+
+  static module = <
+    R,
+    T extends { clear: () => any; resolve: R },
+    A extends F<any, any>,
+    B,
+    V = FlatPromiseOrGenerator<UnpackF<A>>,
+    RC = UnpackCtxF<A>,
+    PC = UnpackProvCtxF<A>
+  >(
+    fn: Arrow2<V, UnpackCtxF<A>, T>
+  ) => (next: A) => new M<B, RC, PC>(fn, next);
 }

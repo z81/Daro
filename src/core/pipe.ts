@@ -269,6 +269,7 @@ export function pipe<
   rs: (r: R) => S,
   st: (s: S) => T
 ): T;
+
 export function pipe(
   a: unknown,
   ab?: Function,

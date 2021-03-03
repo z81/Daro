@@ -9,27 +9,44 @@ import { pipe } from "./core/pipe";
 модули
 */
 
-pipe(
-  F.access<{ discord: Map<string, string> }>(),
-  F.map((_, ctx) => ctx.discord.set("test", "1")),
+class Queue<T> {
+  private queue: T[] = [];
+
+  add = (value: T) => {
+    this.queue.push(value);
+  };
+
+  clear = () => {
+    this.queue = [];
+  };
+}
+
+const ds = pipe(
+  F.access<{ queue: Queue<string> }>(),
   F.map(function* (v, ctx) {
-    yield 1;
-    yield 2;
-    yield 3;
+    yield "Hi!";
+    yield "Username%%";
+    yield "Bye";
   }),
-  F.provide({ discord: new Map<string, string>() })
-  // F.module((_, ctx) => ({
-  //   discord: ctx.discord,
-  // }))
+  F.map((msg, ctx) => ctx.queue.add(msg)),
+  F.provide({ queue: new Queue<string>() }),
+  F.module((_, ctx) => ({
+    resolve: { messagesQueue: ctx.queue },
+    clear: () => ctx.queue.clear(),
+  }))
 );
 
 pipe(
   // F.of(() => 1),
-  F.access<{ mul: number; prefix: string }>(),
+  F.access<{
+    mul: number;
+    prefix: string;
+    ds: typeof ds;
+  }>(),
   F.map((v, ctx) => 1),
   F.map((v, ctx) => `${2 + v}`),
   F.map((v, ctx) => `${ctx.prefix}${Number(v) * ctx.mul}`),
-  F.delay(100),
+  F.delay(1000),
   F.map((v) => Promise.resolve(v + 2)),
   F.map(function* (v, ctx) {
     yield 1;
@@ -38,8 +55,8 @@ pipe(
   }),
   F.map((v) => Promise.resolve(v * 2)),
   F.tap((v, ctx) => console.log("result", v)),
-  F.provide({ mul: 100 }),
-  F.provide({ prefix: "str: " }),
+  F.provide({ mul: 100, prefix: "str: " }),
+  F.provide({ ds /*, queue: new Queue<string>()*/ }),
   // F.catch((e) => {
   //   //
   // }),
