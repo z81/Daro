@@ -126,7 +126,7 @@ export class F<I, RC extends {}, R = {}> {
     const resolve = new Promise(async (res, rej) => {
       await Promise.all(
         Object.entries(ctx).map(async ([k, v]) => {
-          if (typeof v === "object" && v instanceof M) {
+          if (typeof v === "object" && v instanceof M && !v.isResolved) {
             const res = F.runAccept(v);
             const module: any = await res.accept;
 
@@ -145,7 +145,7 @@ export class F<I, RC extends {}, R = {}> {
 
         if (f instanceof M) {
           f.accept((ctx, resolve) => {
-            accept.resolve({ ctx, resolve });
+            accept.resolve({ ctx, resolve: f });
           });
         }
 
@@ -190,102 +190,8 @@ export class F<I, RC extends {}, R = {}> {
   >(
     ...args: I extends never ? [T, U] : [T]
   ) => {
-    const r = F.runAccept(args[0]);
-    return await r.resolve;
+    return await F.runAccept(args[0]).resolve;
   };
-  // static runPromise = <
-  //   T extends F<any, any, any>,
-  //   U extends T extends F<any, infer RC, infer PC>
-  //     ? NotFoundKeyError extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
-  //       ? { [k in keyof RC]: RecDiff<RC, PC>[k] }
-  //       : F<any, RC, PC>
-  //     : never,
-  //   I = NotFoundKeyError extends U[keyof U] ? never : U
-  // >(
-  //   ...args: I extends never ? [T, U] : [T]
-  // ) =>
-  //   new Promise<U>(async (resolve) => {
-  //     let inst: any = { next: args[0] };
-  //     let ctx = {};
-  //     const stacks = [];
-
-  //     while (inst?.next) {
-  //       inst = inst.next;
-  //       ctx = { ...ctx, ...(inst.ctx ?? {}) };
-
-  //       stacks.push(inst as any);
-  //     }
-
-  //     // Todo
-  //     await Promise.all(
-  //       Object.entries(ctx).map(async ([k, v]) => {
-  //         if (typeof v === "object" && v instanceof M) {
-  //           // const { resolve, clear } = v.run(undefined, ctx);
-  //           // ctx = { ...ctx, ...resolve };
-
-  //           // v.setResolve(resolve);
-  //           // v.setClear(clear);
-  //           const rr = new Promise((res) => {
-  //             v.accept((_ctx, resolve) => {
-  //               Object.entries(_ctx).forEach(([kk, v]) => {
-  //                 (ctx as any)[kk] = v;
-  //               });
-
-  //               (ctx as any)[k] = { ..._ctx, ...resolve };
-
-  //               res(undefined);
-  //             });
-  //           });
-
-  //           (F.runPromise as any)(v as any);
-
-  //           await rr;
-  //         }
-  //       })
-  //     );
-
-  //     const branches = [undefined];
-
-  //     for (let i = stacks.length - 1; i >= 0; i--) {
-  //       const stack = stacks[i];
-
-  //       let branchId = 0;
-  //       for (const branch of branches) {
-  //         const value = await stack.run(branch, ctx);
-  //         branches[branchId] = value;
-  //         branchId++;
-
-  //         const isGenerator =
-  //           value &&
-  //           typeof value === "object" &&
-  //           (typeof value![Symbol.iterator] === "function" ||
-  //             typeof value![Symbol.asyncIterator] === "function");
-
-  //         if (isGenerator) {
-  //           let valueIdx = 0;
-
-  //           for await (const v of value) {
-  //             if (valueIdx === branchId - 1) {
-  //               branches[branchId - 1] = v;
-  //             } else {
-  //               branches.push(v);
-  //             }
-
-  //             for (let j = i - 1; j >= 0; j--) {
-  //               branches[branchId - 1] = await stacks[j].run(v, ctx);
-  //             }
-
-  //             valueIdx++;
-  //           }
-
-  //           resolve(branches as any);
-  //           return;
-  //         }
-  //       }
-  //     }
-
-  //     resolve(branches as any);
-  //   });
 
   static empty() {
     return new F(() => undefined);
@@ -312,17 +218,25 @@ export class F<I, RC extends {}, R = {}> {
 
 export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   private clearFn = () => {};
-  private resolve!: IN;
+  private _resolve!: IN;
   private acceptFn: any;
   private isCalled = false;
 
-  setClear = (clear: () => any) => {
+  public get isResolved() {
+    return this.isCalled;
+  }
+
+  public get resolve() {
+    return this._resolve;
+  }
+
+  private setClear = (clear: () => any) => {
     this.clearFn = clear;
     return this;
   };
 
-  setResolve = (resolve: IN) => {
-    this.resolve = resolve;
+  private setResolve = (resolve: IN) => {
+    this._resolve = resolve;
     return this;
   };
 

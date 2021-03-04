@@ -63,20 +63,17 @@ pipe(
   F.access<{
     ds: typeof ds;
   }>(),
-  F.tap((v, ctx) => {
-    console.log(v, ctx.ds);
-  }),
   F.map(function* (_, ctx) {
-    for (const ds of [1, 2, 3, 4]) {
-      yield ds;
+    for (const workerId of [1, 2, 3, 4]) {
+      yield `queue: ${ctx.ds.resolve.queueName} / workerId: ${workerId}`;
     }
   }),
-  F.map(async function* (id, ctx) {
+  F.map(async function* (prefix, ctx) {
     for await (const ds of ctx.queue) {
-      yield `${id} ${ds}`;
+      yield `${prefix} / value: ${ds}`;
     }
   }),
-  F.tap((v) => console.log("result", v)),
+  F.tap((v) => console.log("result:", v)),
   F.provide({ ds }),
   F.runPromise
 );
