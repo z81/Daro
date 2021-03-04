@@ -10,10 +10,10 @@ import { Queue } from "./core/queue";
 модули
 */
 
-const q = new Queue<string>();
-setInterval(() => {
-  q.add(`str ${Math.random()}`);
-}, 100);
+// const q = new Queue<string>();
+// setInterval(() => {
+//   q.add(`str ${Math.random()}`);
+// }, 100);
 
 // setTimeout(() => {
 //   q.reset();
@@ -45,7 +45,7 @@ const delay = (t: number) =>
 
 const ds = pipe(
   F.access<{ queue: Queue<string> }>(),
-  F.map(async function* (v, ctx) {
+  F.map(async function* () {
     while (true) {
       await delay(500);
       yield `str ${Math.random()}`;
@@ -54,42 +54,29 @@ const ds = pipe(
   F.map((msg, ctx) => ctx.queue.add(msg)),
   F.provide({ queue: new Queue<string>() }),
   F.module((_, ctx) => ({
-    resolve: { username: "test" },
+    resolve: { queueName: "queueName 1" },
     clear: () => ctx.queue.clear(),
   }))
 );
 
 pipe(
-  // F.of(() => 1),
   F.access<{
-    mul: number;
-    prefix: string;
     ds: typeof ds;
   }>(),
-  // F.map((v, ctx) => 1),
-  // F.map((v, ctx) => `${2 + v}`),
-  // F.map((v, ctx) => `${ctx.prefix}${Number(v) * ctx.mul}`),
-  // F.delay(1000),
-  // F.map((v) => Promise.resolve(v + 2)),
-  // F.map(function* (v, ctx) {
-  //   yield 1;
-  //   yield 2;
-  // }),
-  F.map(async function* (v, ctx) {
-    for await (const ds of ctx.queue) {
+  F.tap((v, ctx) => {
+    console.log(v, ctx.ds);
+  }),
+  F.map(function* (_, ctx) {
+    for (const ds of [1, 2, 3, 4]) {
       yield ds;
     }
   }),
-  // F.map((v: any) => Promise.resolve(v * 2)),
-  F.tap((v, ctx) => console.log("result", v)),
-  F.provide({ mul: 100, prefix: "str: " }),
-  F.provide({ ds /*, queue: new Queue<string>()*/ }),
-  // F.catch((e) => {
-  //   //
-  // }),
+  F.map(async function* (id, ctx) {
+    for await (const ds of ctx.queue) {
+      yield `${id} ${ds}`;
+    }
+  }),
+  F.tap((v) => console.log("result", v)),
+  F.provide({ ds }),
   F.runPromise
-  // f(function* (v: any) {
-  //   yield v + 3;
-  //   return v + 4;
-  // }),
 );

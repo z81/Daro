@@ -1,5 +1,4 @@
 import { AnyError, NotFoundKeyError } from "./errors";
-// import { M } from "./m";
 import { Arrow, Arrow2, FlatPromiseOrGenerator, RecDiff } from "./types";
 
 export type UnpackF<T extends F<any, any>> = T extends F<infer U, infer V>
@@ -86,6 +85,114 @@ export class F<I, RC extends {}, R = {}> {
     ctx: PC
   ) => (next: A) => new F<V, RCTX, CTX>((v) => v, next, ctx as any);
 
+  private static getRunContext(next: F<unknown, {}>) {
+    let inst: Partial<F<unknown, {}>> = { next };
+    let ctx = {};
+    const stack = [];
+
+    while (inst?.next) {
+      inst = inst.next;
+      ctx = { ...ctx, ...(inst.ctx ?? {}) };
+
+      stack.push(inst);
+    }
+
+    return {
+      ctx,
+      stack,
+    };
+  }
+
+  private static runAccept = (
+    next: F<any, any>,
+    _ctx = {},
+    _stack: any = undefined,
+    _value = undefined
+  ) => {
+    const { ctx, stack } = _stack
+      ? { stack: _stack, ctx: _ctx }
+      : F.getRunContext(next);
+
+    const accept: any = {
+      resolve: () => undefined,
+      reject: () => undefined,
+    };
+
+    const _accept = new Promise((resolve, reject) => {
+      accept.resolve = resolve;
+      accept.reject = reject;
+    });
+
+    const resolve = new Promise(async (res, rej) => {
+      await Promise.all(
+        Object.entries(ctx).map(async ([k, v]) => {
+          if (typeof v === "object" && v instanceof M) {
+            const res = F.runAccept(v);
+            const module: any = await res.accept;
+
+            Object.entries(module.ctx).forEach(([kk, v]) => {
+              (ctx as any)[kk] = v;
+            });
+
+            (ctx as any)[k] = module.resolve;
+          }
+        })
+      );
+
+      let value = _value;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        const f = stack[i] as F<any, any>;
+
+        if (f instanceof M) {
+          f.accept((ctx, resolve) => {
+            accept.resolve({ ctx, resolve });
+          });
+        }
+
+        value = await f.run(value, ctx);
+
+        const isGenerator =
+          value &&
+          typeof value === "object" &&
+          (typeof value![Symbol.iterator] === "function" ||
+            typeof value![Symbol.asyncIterator] === "function");
+
+        if (isGenerator) {
+          // @ts-ignore
+          for await (const v of value) {
+            F.runAccept(next, ctx, stack.slice(0, i), v).accept.then(
+              accept.resolve
+            );
+          }
+
+          res(value);
+          return;
+        }
+      }
+
+      res(value);
+    });
+
+    return {
+      accept: _accept,
+      resolve,
+    };
+  };
+
+  static runPromise = async <
+    T extends F<any, any, any>,
+    U extends T extends F<any, infer RC, infer PC>
+      ? NotFoundKeyError extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
+        ? { [k in keyof RC]: RecDiff<RC, PC>[k] }
+        : F<any, RC, PC>
+      : never,
+    I = NotFoundKeyError extends U[keyof U] ? never : U
+  >(
+    ...args: I extends never ? [T, U] : [T]
+  ) => {
+    const r = F.runAccept(args[0]);
+    return await r.resolve;
+  };
   // static runPromise = <
   //   T extends F<any, any, any>,
   //   U extends T extends F<any, infer RC, infer PC>
@@ -105,134 +212,80 @@ export class F<I, RC extends {}, R = {}> {
   //     while (inst?.next) {
   //       inst = inst.next;
   //       ctx = { ...ctx, ...(inst.ctx ?? {}) };
-  //       stacks.unshift(inst as any);
+
+  //       stacks.push(inst as any);
   //     }
 
-  //     let branches = [undefined];
-  //     for (const inst of stacks) {
-  //       for (const idx in branches) {
-  //         const branch = branches[idx];
+  //     // Todo
+  //     await Promise.all(
+  //       Object.entries(ctx).map(async ([k, v]) => {
+  //         if (typeof v === "object" && v instanceof M) {
+  //           // const { resolve, clear } = v.run(undefined, ctx);
+  //           // ctx = { ...ctx, ...resolve };
+
+  //           // v.setResolve(resolve);
+  //           // v.setClear(clear);
+  //           const rr = new Promise((res) => {
+  //             v.accept((_ctx, resolve) => {
+  //               Object.entries(_ctx).forEach(([kk, v]) => {
+  //                 (ctx as any)[kk] = v;
+  //               });
+
+  //               (ctx as any)[k] = { ..._ctx, ...resolve };
+
+  //               res(undefined);
+  //             });
+  //           });
+
+  //           (F.runPromise as any)(v as any);
+
+  //           await rr;
+  //         }
+  //       })
+  //     );
+
+  //     const branches = [undefined];
+
+  //     for (let i = stacks.length - 1; i >= 0; i--) {
+  //       const stack = stacks[i];
+
+  //       let branchId = 0;
+  //       for (const branch of branches) {
+  //         const value = await stack.run(branch, ctx);
+  //         branches[branchId] = value;
+  //         branchId++;
 
   //         const isGenerator =
-  //           branch &&
-  //           typeof branch === "object" &&
-  //           (typeof branch![Symbol.iterator] === "function" ||
-  //             typeof branch![Symbol.asyncIterator] === "function");
+  //           value &&
+  //           typeof value === "object" &&
+  //           (typeof value![Symbol.iterator] === "function" ||
+  //             typeof value![Symbol.asyncIterator] === "function");
 
-  //         if (isGenerator && !Array.isArray(branch)) {
-  //           let i = 0;
-  //           // @ts-ignore
-  //           for await (const newBranch of branches[idx]) {
-  //             if (i++ < branches.length) {
-  //               branches[idx] = await inst.run(newBranch, ctx);
+  //         if (isGenerator) {
+  //           let valueIdx = 0;
+
+  //           for await (const v of value) {
+  //             if (valueIdx === branchId - 1) {
+  //               branches[branchId - 1] = v;
   //             } else {
-  //               branches.push(await inst.run(newBranch, ctx));
+  //               branches.push(v);
   //             }
-  //           }
-  //         }
-  //       }
 
-  //       for (const idx in branches) {
-  //         branches[idx] = await inst.run(branches[idx], ctx);
+  //             for (let j = i - 1; j >= 0; j--) {
+  //               branches[branchId - 1] = await stacks[j].run(v, ctx);
+  //             }
+
+  //             valueIdx++;
+  //           }
+
+  //           resolve(branches as any);
+  //           return;
+  //         }
   //       }
   //     }
 
   //     resolve(branches as any);
   //   });
-
-  static runPromise = <
-    T extends F<any, any, any>,
-    U extends T extends F<any, infer RC, infer PC>
-      ? NotFoundKeyError extends RecDiff<RC, PC>[keyof RecDiff<RC, PC>]
-        ? { [k in keyof RC]: RecDiff<RC, PC>[k] }
-        : F<any, RC, PC>
-      : never,
-    I = NotFoundKeyError extends U[keyof U] ? never : U
-  >(
-    ...args: I extends never ? [T, U] : [T]
-  ) =>
-    new Promise<U>(async (resolve) => {
-      let inst: any = { next: args[0] };
-      let ctx = {};
-      const stacks = [];
-
-      while (inst?.next) {
-        inst = inst.next;
-        ctx = { ...ctx, ...(inst.ctx ?? {}) };
-
-        stacks.push(inst as any);
-      }
-
-      // Todo
-      await Promise.all(
-        Object.entries(ctx).map(async ([k, v]) => {
-          if (typeof v === "object" && v instanceof M) {
-            // const { resolve, clear } = v.run(undefined, ctx);
-            // ctx = { ...ctx, ...resolve };
-
-            // v.setResolve(resolve);
-            // v.setClear(clear);
-            const rr = new Promise((res) => {
-              v.accept((_ctx, resolve) => {
-                Object.entries(_ctx).forEach(([kk, v]) => {
-                  (ctx as any)[kk] = v;
-                });
-
-                (ctx as any)[k] = { ..._ctx, ...resolve };
-
-                res(undefined);
-              });
-            });
-
-            (F.runPromise as any)(v as any);
-
-            await rr;
-          }
-        })
-      );
-
-      const branches = [undefined];
-
-      for (let i = stacks.length - 1; i >= 0; i--) {
-        const stack = stacks[i];
-
-        let branchId = 0;
-        for (const branch of branches) {
-          const value = await stack.run(branch, ctx);
-          branches[branchId] = value;
-          branchId++;
-
-          const isGenerator =
-            value &&
-            typeof value === "object" &&
-            (typeof value![Symbol.iterator] === "function" ||
-              typeof value![Symbol.asyncIterator] === "function");
-
-          if (isGenerator) {
-            let valueIdx = 0;
-
-            for await (const v of value) {
-              if (valueIdx === branchId - 1) {
-                branches[branchId - 1] = v;
-              } else {
-                branches.push(v);
-              }
-
-              for (let j = i - 1; j >= 0; j--) {
-                branches[branchId - 1] = await stacks[j].run(v, ctx);
-              }
-
-              valueIdx++;
-            }
-
-            resolve(branches as any);
-            return;
-          }
-        }
-      }
-
-      resolve(branches as any);
-    });
 
   static empty() {
     return new F(() => undefined);
@@ -261,6 +314,7 @@ export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   private clearFn = () => {};
   private resolve!: IN;
   private acceptFn: any;
+  private isCalled = false;
 
   setClear = (clear: () => any) => {
     this.clearFn = clear;
@@ -275,14 +329,22 @@ export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   clear = () => this.clearFn();
 
   run = (arg: I, ctx: RC) => {
+    if (this.isCalled) {
+      return arg;
+    }
+
     const res = this.register(arg, ctx);
     this.setClear(res.clear);
     this.setResolve(res.resolve);
     this.acceptFn(ctx, res.resolve);
+
+    this.isCalled = true;
     return res;
   };
 
   accept = (cb: (ctx: RC, arg: any) => any) => {
-    this.acceptFn = cb;
+    if (!this.acceptFn) {
+      this.acceptFn = cb;
+    }
   };
 }
