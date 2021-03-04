@@ -131,7 +131,7 @@ export class F<I, RC extends {}, R = {}> {
             const module: any = await res.accept;
 
             Object.entries(module.ctx).forEach(([kk, v]) => {
-              (ctx as any)[kk] = v;
+              (ctx as any)[kk] = (ctx as any)[kk] || v;
             });
 
             (ctx as any)[k] = module.resolve;

@@ -2,18 +2,10 @@ import { F } from "./core/f";
 import { pipe } from "./core/pipe";
 import { Queue } from "./core/queue";
 
-/*
-проброс контекста [x]
-генераторы [x]
-паралельное выполнение / таймаут
-обработка ошибок
-модули
-*/
-
-// const q = new Queue<string>();
-// setInterval(() => {
-//   q.add(`str ${Math.random()}`);
-// }, 100);
+const q = new Queue<string>();
+setInterval(() => {
+  q.add(`outside queue ${Math.random()}`);
+}, 100);
 
 // setTimeout(() => {
 //   q.reset();
@@ -74,6 +66,6 @@ pipe(
     }
   }),
   F.tap((v) => console.log("result:", v)),
-  F.provide({ ds }),
+  F.provide({ ds, queue: q }),
   F.runPromise
 );
