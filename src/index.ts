@@ -1,4 +1,5 @@
 import { F } from "./core/f";
+import { delay } from "./core/fn";
 import { pipe } from "./core/pipe";
 import { Queue } from "./core/queue";
 
@@ -29,11 +30,6 @@ setInterval(() => {
 //   }
 //   console.log("333333 end");
 // })();
-
-const delay = (t: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, t);
-  });
 
 const ds = pipe(
   F.access<{ queue: Queue<string> }>(),

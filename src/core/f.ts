@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { AnyError, NotFoundKeyError } from "./errors";
 import { Arrow, Arrow2, FlatPromiseOrGenerator, RecDiff } from "./types";
 
@@ -103,56 +104,64 @@ export class F<I, RC extends {}, R = {}> {
     };
   }
 
+  private static getDebugName(prefix = "") {
+    // Todo: is debug
+    return `${prefix}${nanoid(4)}`;
+  }
+
   private static runAccept = (
     next: F<any, any>,
-    _ctx = {},
+    _ctx: Record<string, any> = {},
     _stack: any = undefined,
     _value = undefined,
-    level = `${Math.floor(Math.random() * 10000)}`
+    level = F.getDebugName()
   ) => {
     const { ctx, stack } = _stack
       ? { stack: _stack, ctx: _ctx }
       : F.getRunContext(next);
 
-    const accept: any = {
-      resolve: () => undefined,
-      reject: () => undefined,
+    const acceptResolvers = {
+      resolve: (value: unknown): void => undefined,
+      reject: (error: unknown): void => undefined,
     };
 
     const _accept = new Promise((resolve, reject) => {
-      accept.resolve = resolve;
-      accept.reject = reject;
+      acceptResolvers.resolve = resolve;
+      acceptResolvers.reject = reject;
     });
 
-    const resolve = new Promise(async (res, rej) => {
+    const resolve = new Promise(async (mainResolve, mainReject) => {
       await Promise.all(
-        Object.entries(ctx).map(async ([k, v]) => {
-          if (typeof v === "object" && v instanceof M && !v.isResolved) {
-            const res = F.runAccept(
-              v,
+        Object.entries(ctx).map(async ([name, dependency]) => {
+          if (
+            typeof dependency === "object" &&
+            dependency instanceof M &&
+            !dependency.isResolved
+          ) {
+            const branchResult = F.runAccept(
+              dependency,
               undefined,
               undefined,
               undefined,
-              `${level} ${Math.floor(Math.random() * 10000)}`
+              F.getDebugName(level)
             );
-            const module: any = await res.accept;
 
+            const module = (await branchResult.accept) as {
+              ctx: Record<string, any>;
+              resolve: Record<string, any>;
+            };
+
+            // Merge ctx
             Object.entries(module.ctx).forEach(([kk, v]) => {
-              (ctx as any)[kk] = (ctx as any)[kk] || v;
+              ctx[kk] = ctx[kk] || v;
             });
 
-            (ctx as any)[k] = module.resolve;
-
-            // res.resolve.then(([, isLive]: any) => {
-            //   if (!isLive) {
-            //     v.clear();
-            //   }
-            // });
+            ctx[name] = module.resolve;
           }
         })
       );
 
-      let genPromise: any;
+      let generatorPromise: Promise<any> | undefined;
       let value = _value;
 
       for (let i = stack.length - 1; i >= 0; i--) {
@@ -160,7 +169,8 @@ export class F<I, RC extends {}, R = {}> {
 
         if (f instanceof M) {
           f.accept((ctx) => {
-            accept.resolve({ ctx, resolve: f });
+            // Resolve deps
+            acceptResolvers.resolve({ ctx, resolve: f });
           });
 
           await f.run(value, ctx);
@@ -182,22 +192,20 @@ export class F<I, RC extends {}, R = {}> {
                 ctx,
                 nextStack,
                 v,
-                `${level} ${Math.floor(Math.random() * 10000)}`
+                F.getDebugName(level)
               );
-              rr.accept.then(accept.resolve);
+              rr.accept.then(acceptResolvers.resolve);
 
-              genPromise = rr.resolve;
-              // rr.resolve.then(res);
+              generatorPromise = rr.resolve;
             }
-            // Promise.all(promises).then(res);
-            // res(value);
+
             i = 0;
           }
         }
       }
 
-      if (genPromise) {
-        value = await genPromise;
+      if (generatorPromise) {
+        value = await generatorPromise;
 
         const module = stack.find((m: any) => m instanceof M);
         if (module) {
@@ -207,7 +215,7 @@ export class F<I, RC extends {}, R = {}> {
         }
       }
 
-      res(value);
+      mainResolve(value);
     });
 
     return {
