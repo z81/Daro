@@ -18,11 +18,6 @@ export class Queue<T> {
   };
 
   clear = () => {
-    this.queue = [];
-  };
-
-  reset = () => {
-    this.clear();
     this.resolvers.forEach((r) => r());
     this.resolvers.clear();
     this.thisResolver = 0;

@@ -83,7 +83,7 @@ export class F<I, RC extends {}, R = {}> {
     CTX = PC & PPC
   >(
     ctx: PC
-  ) => (next: A) => new F<V, RCTX, CTX>((v) => v, next, ctx as any);
+  ) => (next: A) => new F<V, RCTX, CTX>((_) => _, next, ctx as any);
 
   private static getRunContext(next: F<unknown, {}>) {
     let inst: Partial<F<unknown, {}>> = { next };
@@ -107,7 +107,8 @@ export class F<I, RC extends {}, R = {}> {
     next: F<any, any>,
     _ctx = {},
     _stack: any = undefined,
-    _value = undefined
+    _value = undefined,
+    level = `${Math.floor(Math.random() * 10000)}`
   ) => {
     const { ctx, stack } = _stack
       ? { stack: _stack, ctx: _ctx }
@@ -127,7 +128,13 @@ export class F<I, RC extends {}, R = {}> {
       await Promise.all(
         Object.entries(ctx).map(async ([k, v]) => {
           if (typeof v === "object" && v instanceof M && !v.isResolved) {
-            const res = F.runAccept(v);
+            const res = F.runAccept(
+              v,
+              undefined,
+              undefined,
+              undefined,
+              `${level} ${Math.floor(Math.random() * 10000)}`
+            );
             const module: any = await res.accept;
 
             Object.entries(module.ctx).forEach(([kk, v]) => {
@@ -135,38 +142,68 @@ export class F<I, RC extends {}, R = {}> {
             });
 
             (ctx as any)[k] = module.resolve;
+
+            // res.resolve.then(([, isLive]: any) => {
+            //   if (!isLive) {
+            //     v.clear();
+            //   }
+            // });
           }
         })
       );
 
+      let genPromise: any;
       let value = _value;
+
       for (let i = stack.length - 1; i >= 0; i--) {
         const f = stack[i] as F<any, any>;
 
         if (f instanceof M) {
-          f.accept((ctx, resolve) => {
+          f.accept((ctx) => {
             accept.resolve({ ctx, resolve: f });
           });
-        }
 
-        value = await f.run(value, ctx);
+          await f.run(value, ctx);
+        } else {
+          value = await f.run(value, ctx);
 
-        const isGenerator =
-          value &&
-          typeof value === "object" &&
-          (typeof value![Symbol.iterator] === "function" ||
-            typeof value![Symbol.asyncIterator] === "function");
+          const isGenerator =
+            value &&
+            typeof value === "object" &&
+            (typeof value![Symbol.iterator] === "function" ||
+              typeof value![Symbol.asyncIterator] === "function");
 
-        if (isGenerator) {
-          // @ts-ignore
-          for await (const v of value) {
-            F.runAccept(next, ctx, stack.slice(0, i), v).accept.then(
-              accept.resolve
-            );
+          if (isGenerator) {
+            const nextStack = stack.slice(0, i);
+            // @ts-ignore
+            for await (const v of value) {
+              const rr = F.runAccept(
+                next,
+                ctx,
+                nextStack,
+                v,
+                `${level} ${Math.floor(Math.random() * 10000)}`
+              );
+              rr.accept.then(accept.resolve);
+
+              genPromise = rr.resolve;
+              // rr.resolve.then(res);
+            }
+            // Promise.all(promises).then(res);
+            // res(value);
+            i = 0;
           }
+        }
+      }
 
-          res(value);
-          return;
+      if (genPromise) {
+        value = await genPromise;
+
+        const module = stack.find((m: any) => m instanceof M);
+        if (module) {
+          setTimeout(() => {
+            module.clear();
+          });
         }
       }
 
@@ -190,7 +227,8 @@ export class F<I, RC extends {}, R = {}> {
   >(
     ...args: I extends never ? [T, U] : [T]
   ) => {
-    return await F.runAccept(args[0]).resolve;
+    const [v] = (await F.runAccept(args[0]).resolve) as any;
+    return v;
   };
 
   static empty() {
