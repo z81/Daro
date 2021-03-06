@@ -16,14 +16,20 @@ export type UnpackProvCtxF<T extends F<any, any>> = T extends F<
   ? U
   : {};
 
+export const enableTrace = Symbol.for("EnableTrace");
+
 export class F<I, RC extends {}, R = {}> {
   readonly _tag = "F";
+  name = "";
 
   constructor(
     readonly register: Arrow2<any, any, any>,
     readonly next?: F<any, any>,
-    readonly ctx?: R
-  ) {}
+    readonly ctx?: R,
+    name = ""
+  ) {
+    this.name = register.name || name;
+  }
 
   run = (arg: I, ctx: RC) => this.register(arg, ctx);
 
@@ -37,7 +43,7 @@ export class F<I, RC extends {}, R = {}> {
       (v) => new Promise<R>((resolve) => setTimeout(resolve, time, v)) as any
     );
 
-  static of = <R>(fn: () => R) => new F<R, any>(fn);
+  static of = <R>(fn: () => R) => new F<R, any>(fn, undefined, undefined, "of");
 
   static access = <
     T,
@@ -49,7 +55,8 @@ export class F<I, RC extends {}, R = {}> {
     },
     RC = U[keyof U] extends never ? T : T & U[keyof U],
     PC = D[keyof D] extends never ? {} : D[keyof D]
-  >() => new F<undefined, RC, PC>(() => undefined);
+  >() =>
+    new F<undefined, RC, PC>(() => undefined, undefined, undefined, "access");
 
   static map = <
     A extends F<any, any, any>,
@@ -59,7 +66,7 @@ export class F<I, RC extends {}, R = {}> {
     PC = UnpackProvCtxF<A>
   >(
     fn: Arrow2<V, UnpackCtxF<A>, B>
-  ) => (next: A) => new F<B, RC, PC>(fn, next);
+  ) => (next: A) => new F<B, RC, PC>(fn, next, undefined, "map");
 
   static tap = <
     A extends F<any, any>,
@@ -70,10 +77,15 @@ export class F<I, RC extends {}, R = {}> {
   >(
     fn: Arrow2<V, UnpackCtxF<A>, any>
   ) => (next: A) =>
-    new F<B, RC, PC>((...args) => {
-      fn(...args);
-      return args[0];
-    }, next);
+    new F<B, RC, PC>(
+      (...args) => {
+        fn(...args);
+        return args[0];
+      },
+      next,
+      undefined,
+      "tap"
+    );
 
   static provide = <
     A extends F<any, any>,
@@ -84,7 +96,7 @@ export class F<I, RC extends {}, R = {}> {
     CTX = PC & PPC
   >(
     ctx: PC
-  ) => (next: A) => new F<V, RCTX, CTX>((_) => _, next, ctx as any);
+  ) => (next: A) => new F<V, RCTX, CTX>((_) => _, next, ctx as any, "provide");
 
   private static getRunContext(next: F<unknown, {}>) {
     let inst: Partial<F<unknown, {}>> = { next };
@@ -106,7 +118,7 @@ export class F<I, RC extends {}, R = {}> {
 
   private static getDebugName(prefix = "") {
     // Todo: is debug
-    return `${prefix}${nanoid(4)}`;
+    return `${prefix ? `${prefix} / ` : ""}${nanoid(4)}`;
   }
 
   private static runAccept = (
@@ -114,7 +126,8 @@ export class F<I, RC extends {}, R = {}> {
     _ctx: Record<string, any> = {},
     _stack: any = undefined,
     _value = undefined,
-    level = F.getDebugName()
+    level = F.getDebugName(),
+    trace: string[] = []
   ) => {
     const { ctx, stack } = _stack
       ? { stack: _stack, ctx: _ctx }
@@ -143,7 +156,8 @@ export class F<I, RC extends {}, R = {}> {
               undefined,
               undefined,
               undefined,
-              F.getDebugName(level)
+              F.getDebugName(level),
+              trace
             );
 
             const module = (await branchResult.accept) as {
@@ -167,6 +181,11 @@ export class F<I, RC extends {}, R = {}> {
       for (let i = stack.length - 1; i >= 0; i--) {
         const f = stack[i] as F<any, any>;
 
+        trace.push(
+          `[${Date.now()}]   ${level} `.padEnd(50, " ") +
+            `${f.name.padEnd(30, " ")}   ${value}`
+        );
+
         if (f instanceof M) {
           f.accept((ctx) => {
             // Resolve deps
@@ -187,16 +206,17 @@ export class F<I, RC extends {}, R = {}> {
             const nextStack = stack.slice(0, i);
             // @ts-ignore
             for await (const v of value) {
-              const rr = F.runAccept(
+              const genResult = F.runAccept(
                 next,
                 ctx,
                 nextStack,
                 v,
-                F.getDebugName(level)
+                F.getDebugName(level),
+                trace
               );
-              rr.accept.then(acceptResolvers.resolve);
+              genResult.accept.then(acceptResolvers.resolve);
 
-              generatorPromise = rr.resolve;
+              generatorPromise = genResult.resolve;
             }
 
             i = 0;
@@ -235,12 +255,30 @@ export class F<I, RC extends {}, R = {}> {
   >(
     ...args: I extends never ? [T, U] : [T]
   ) => {
-    const [v] = (await F.runAccept(args[0]).resolve) as any;
-    return v;
+    const head =
+      `      time        id`.padEnd(50, " ") +
+      "name" +
+      " ".repeat(29) +
+      "argument" +
+      " ".repeat(10);
+    const trace: string[] = [head, "-".repeat(head.length)];
+
+    const result = await F.runAccept(
+      args[0],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      trace
+    ).resolve;
+
+    console.log(trace.join("\n"));
+
+    return result;
   };
 
   static empty() {
-    return new F(() => undefined);
+    return new F(() => undefined, undefined, undefined, "empty");
   }
 
   static module = <
@@ -259,9 +297,10 @@ export class F<I, RC extends {}, R = {}> {
       RC & ReturnType<typeof fn>["resolve"],
       PC & ReturnType<typeof fn>["resolve"],
       ReturnType<typeof fn>["resolve"]
-    >(fn, next);
+    >(fn, next, undefined, "module");
 }
 
+// Todo: fix cycle deps
 export class M<I, RC extends {}, R = {}, IN = {}> extends F<I, RC, R> {
   private clearFn = () => {};
   private _resolve!: IN;
