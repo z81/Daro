@@ -18,6 +18,7 @@ export class Queue<T> {
   };
 
   clear = () => {
+    this.queue = [];
     this.resolvers.forEach((r) => r());
     this.resolvers.clear();
     this.thisResolver = 0;
