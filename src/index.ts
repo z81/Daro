@@ -39,9 +39,9 @@ const ds = pipe(
       await delay(500);
       yield `str ${i++} ${Math.random()}`;
 
-      if (i >= 5) {
-        return;
-      }
+      //if (i >= 5) {
+      return;
+      //}
     }
   }),
   F.map(function queueAdd(msg, ctx) {
@@ -69,7 +69,10 @@ pipe(
     }
   }),
   F.tap((v) => console.log("result:", v)),
-  F.provide({ ds }),
+  F.provide({
+    ds,
+    [F.useTrace]: true,
+  }),
   F.runPromise,
   (v) => {
     v.then((v) => console.log("end", v));

@@ -117,8 +117,7 @@ export class F<I, RC extends {}, R = {}> {
   }
 
   private static getDebugName(prefix = "") {
-    // Todo: is debug
-    return `${prefix ? `${prefix} / ` : ""}${nanoid(4)}`;
+    return `${prefix ? `${prefix} / ` : ""}${nanoid(4).toUpperCase()}`;
   }
 
   private static runAccept = (
@@ -127,11 +126,12 @@ export class F<I, RC extends {}, R = {}> {
     _stack: any = undefined,
     _value = undefined,
     level = F.getDebugName(),
-    trace: string[] = []
+    trace: string[] = [],
+    isRoot = false
   ) => {
-    const { ctx, stack } = _stack
-      ? { stack: _stack, ctx: _ctx }
-      : F.getRunContext(next);
+    const runCtx = F.getRunContext(next);
+    const ctx: any = Object.assign(runCtx.ctx, _ctx);
+    const stack: any = _stack ?? runCtx?.stack;
 
     const acceptResolvers = {
       resolve: (value: unknown): void => undefined,
@@ -143,6 +143,8 @@ export class F<I, RC extends {}, R = {}> {
       acceptResolvers.reject = reject;
     });
 
+    const isTraceEnabled = F.useTrace in ctx;
+
     const resolve = new Promise(async (mainResolve, mainReject) => {
       await Promise.all(
         Object.entries(ctx).map(async ([name, dependency]) => {
@@ -151,12 +153,19 @@ export class F<I, RC extends {}, R = {}> {
             dependency instanceof M &&
             !dependency.isResolved
           ) {
+            let moduleId = "";
+            if (isTraceEnabled) {
+              // trace
+              moduleId = F.getDebugName(level);
+              trace.push(" ".repeat(40) + `Run module "${name}" (${moduleId})`);
+            }
+
             const branchResult = F.runAccept(
               dependency,
+              isTraceEnabled ? { [F.useTrace]: true } : undefined,
               undefined,
               undefined,
-              undefined,
-              F.getDebugName(level),
+              moduleId,
               trace
             );
 
@@ -171,6 +180,12 @@ export class F<I, RC extends {}, R = {}> {
             });
 
             ctx[name] = module.resolve;
+
+            if (isTraceEnabled) {
+              branchResult.resolve.then((d) => {
+                trace.push(" ".repeat(40) + `End module "${name}"`);
+              });
+            }
           }
         })
       );
@@ -181,10 +196,12 @@ export class F<I, RC extends {}, R = {}> {
       for (let i = stack.length - 1; i >= 0; i--) {
         const f = stack[i] as F<any, any>;
 
-        trace.push(
-          `[${Date.now()}]   ${level} `.padEnd(50, " ") +
-            `${f.name.padEnd(30, " ")}   ${value}`
-        );
+        if (isTraceEnabled) {
+          trace.push(
+            `[${Date.now()}]   ${level} `.padEnd(50, " ") +
+              `${f.name.padEnd(30, " ")}   ${value}`
+          );
+        }
 
         if (f instanceof M) {
           f.accept((ctx) => {
@@ -211,7 +228,7 @@ export class F<I, RC extends {}, R = {}> {
                 ctx,
                 nextStack,
                 v,
-                F.getDebugName(level),
+                isTraceEnabled ? F.getDebugName(level) : "",
                 trace
               );
               genResult.accept.then(acceptResolvers.resolve);
@@ -230,12 +247,19 @@ export class F<I, RC extends {}, R = {}> {
         const module = stack.find((m: any) => m instanceof M);
         if (module) {
           setTimeout(() => {
+            if (isTraceEnabled) {
+              trace.push(`Module ${module.name} run clear`);
+            }
             module.clear();
           });
         }
       }
 
       mainResolve(value);
+
+      if (isRoot && isTraceEnabled) {
+        F.printDebugTable(trace);
+      }
     });
 
     return {
@@ -243,6 +267,39 @@ export class F<I, RC extends {}, R = {}> {
       resolve,
     };
   };
+
+  private static printDebugTable(trace: string[]) {
+    let head =
+      `      time        id`.padEnd(50, " ") +
+      "name" +
+      " ".repeat(29) +
+      "argument";
+    const maxLength = trace.reduce(
+      (len, str) => Math.max(len, str.length),
+      head.length
+    );
+
+    head = head + " ".repeat(maxLength - head.length);
+    const line = "─".repeat(maxLength);
+
+    trace.unshift(line, head, line);
+    trace.push(line);
+
+    trace = trace.map((str, i) => {
+      str = str.padEnd(maxLength, " ");
+
+      switch (i) {
+        case 0:
+          return `┌${str}┐`;
+        case trace.length - 1:
+          return `└${str}┘`;
+        default:
+          return `│${str}│`;
+      }
+    });
+
+    console.log(trace.join("\n"));
+  }
 
   static runPromise = async <
     T extends F<any, any, any>,
@@ -255,13 +312,7 @@ export class F<I, RC extends {}, R = {}> {
   >(
     ...args: I extends never ? [T, U] : [T]
   ) => {
-    const head =
-      `      time        id`.padEnd(50, " ") +
-      "name" +
-      " ".repeat(29) +
-      "argument" +
-      " ".repeat(10);
-    const trace: string[] = [head, "-".repeat(head.length)];
+    const trace: string[] = [];
 
     const result = await F.runAccept(
       args[0],
@@ -269,10 +320,9 @@ export class F<I, RC extends {}, R = {}> {
       undefined,
       undefined,
       undefined,
-      trace
+      trace,
+      true
     ).resolve;
-
-    console.log(trace.join("\n"));
 
     return result;
   };
@@ -298,6 +348,8 @@ export class F<I, RC extends {}, R = {}> {
       PC & ReturnType<typeof fn>["resolve"],
       ReturnType<typeof fn>["resolve"]
     >(fn, next, undefined, "module");
+
+  static useTrace = Symbol.for("useTrace");
 }
 
 // Todo: fix cycle deps
