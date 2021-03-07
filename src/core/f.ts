@@ -155,7 +155,6 @@ export class F<I, RC extends {}, R = {}> {
           ) {
             let moduleId = "";
             if (isTraceEnabled) {
-              // trace
               moduleId = F.getDebugName(level);
               trace.push(" ".repeat(40) + `Run module "${name}" (${moduleId})`);
             }
@@ -174,17 +173,14 @@ export class F<I, RC extends {}, R = {}> {
               resolve: Record<string, any>;
             };
 
-            // Merge ctx
-            Object.entries(module.ctx).forEach(([kk, v]) => {
-              ctx[kk] = ctx[kk] || v;
-            });
+            Object.assign(ctx, module.ctx);
 
             ctx[name] = module.resolve;
 
             if (isTraceEnabled) {
-              branchResult.resolve.then((d) => {
-                trace.push(" ".repeat(40) + `End module "${name}"`);
-              });
+              branchResult.resolve.then(() =>
+                trace.push(" ".repeat(40) + `End module "${name}"`)
+              );
             }
           }
         })
@@ -197,27 +193,26 @@ export class F<I, RC extends {}, R = {}> {
         const f = stack[i] as F<any, any>;
 
         if (isTraceEnabled) {
+          const date = new Date();
+          const ms = `${date.getMilliseconds()}`.padStart(3, "0");
+          const time = `${date.toLocaleTimeString()}:${ms}`;
+
           trace.push(
-            `[${Date.now()}]   ${level} `.padEnd(50, " ") +
+            `[${time}]   ${level} `.padEnd(50, " ") +
               `${f.name.padEnd(30, " ")}   ${value}`
           );
         }
 
         if (f instanceof M) {
-          f.accept((ctx) => {
-            // Resolve deps
-            acceptResolvers.resolve({ ctx, resolve: f });
-          });
+          f.accept((ctx) => acceptResolvers.resolve({ ctx, resolve: f }));
 
           await f.run(value, ctx);
         } else {
           value = await f.run(value, ctx);
 
           const isGenerator =
-            value &&
-            typeof value === "object" &&
-            (typeof value![Symbol.iterator] === "function" ||
-              typeof value![Symbol.asyncIterator] === "function");
+            typeof value?.[Symbol.iterator] === "function" ||
+            typeof value?.[Symbol.asyncIterator] === "function";
 
           if (isGenerator) {
             const nextStack = stack.slice(0, i);
@@ -248,7 +243,7 @@ export class F<I, RC extends {}, R = {}> {
         if (module) {
           setTimeout(() => {
             if (isTraceEnabled) {
-              trace.push(`Module ${module.name} run clear`);
+              trace.push(" ".repeat(40) + `Module "${module.name}" run clear`);
             }
             module.clear();
           });
@@ -269,11 +264,13 @@ export class F<I, RC extends {}, R = {}> {
   };
 
   private static printDebugTable(trace: string[]) {
-    let head =
-      `      time        id`.padEnd(50, " ") +
-      "name" +
-      " ".repeat(29) +
-      "argument";
+    let head = [
+      `      time        id`.padEnd(50, " "),
+      "name",
+      " ".repeat(29),
+      "argument",
+    ].join("");
+
     const maxLength = trace.reduce(
       (len, str) => Math.max(len, str.length),
       head.length
